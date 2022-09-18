@@ -5,9 +5,12 @@
   "author": "redwanratu",
   "license": "MIT",
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "dotenv": "^16.0.2",
     "express": "4",
-    "mongoose": "5"
+    "jsonwebtoken": "^8.5.1",
+    "mongoose": "5",
+    "validator": "^13.7.0"
   },
   "scripts": {
     "start": "nodemon server.js"
