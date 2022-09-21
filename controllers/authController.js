@@ -2,7 +2,9 @@ const User = require('./../models/userModel');
 const catchAsync = require('./../utils/catchAsync');
 const jwt = require('jsonwebtoken');
 const AppError = require('../utils/AppError');
+const sendMail = require('../utils/email');
 const { promisify } = require('util');
+const crypto = require('crypto');
 //authentication should not be hamdled simply
 //Users data is stake here
 // Payload Id, JWT secret , Expires time
@@ -114,3 +116,90 @@ exports.restrictTo = (...roles) => {
     next();
   };
 };
+
+exports.forgetPassword = catchAsync(async (req, res, next) => {
+  // 1. get user based on posted mail
+  const user = await User.findOne({ email: req.body.email });
+
+  if (!user) {
+    return next(new AppError('No user found on this email address', 404));
+  }
+  // 2. generate random token
+  // using instance method in models
+  // using crypto
+  const resetToken = user.createPasswordResetToken();
+  user.save({ validateBeforeSave: false });
+  // 3. Actually send the e-mail
+  // using nodemailer package
+  // mailtrap account is needed
+
+  const resetURL = `${req.protocol}://${req.get(
+    'host'
+  )}/api/v1/users/reset-password/${resetToken}`;
+  //console.log(resetToken);
+
+  const message = `Forget your password?? Submit a PATCH request with your new password and posswordConfirm to : ${resetURL}\n If you didn't forget your password, Please ignore this massage`;
+
+  // use try catch
+  // if error occure reset the token and expire data at database to  reset
+  try {
+    await sendMail({
+      email: user.email,
+      subject: 'Password reset token (valid for 10 min)',
+      message,
+    });
+
+    res.status(200).json({
+      message: `Password Reset Token send to ${user.email}`,
+    });
+  } catch (err) {
+    user.passwordResetToken = undefined;
+    user.passResetTokenExpiresTime = undefined;
+    user.save({ validateBeforeSave: false });
+
+    res.status(404).json({
+      err,
+    });
+    //return next(new AppError('ERROR occurs, Try again Later'), 500);
+  }
+
+  //***********this will be deleted next*********
+
+  console.log('FORGET PASSWORD');
+  //********************************************* */
+});
+
+exports.resetPassword = catchAsync(async (req, res, next) => {
+  // 1. Get user based on the reset token
+  const hashedToken = crypto
+    .createHash('sha256')
+    .update(req.params.token)
+    .digest('hex');
+
+  const user = await User.findOne({
+    passwordResetToken: hashedToken,
+    passResetTokenExpiresTime: { $gt: Date.now() },
+  });
+  // 2. if password reset has not expired, reset password
+  if (!user) {
+    return next(new AppError('Token is invalid or Expired'), 404);
+  }
+
+  user.password = req.body.password;
+  user.passwordConfirm = req.body.passwordConfirm;
+  user.passwordResetToken = undefined;
+  user.passResetTokenExpiresTime = undefined;
+  await user.save();
+
+  // 3. change passwordChangedAt property at User MODEL
+  // 4. log in user and send JWT
+
+  const token = signToken(user.id);
+
+  res.status(201).json({
+    status: 'success',
+    token,
+  });
+
+  console.log('RESET PASSWORD');
+});
