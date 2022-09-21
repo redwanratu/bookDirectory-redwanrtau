@@ -1,6 +1,6 @@
 const express = require('express');
 const bookController = require('../controllers/bookController.js');
-const authController  = require('./../controllers/authController' );
+const authController = require('./../controllers/authController');
 const router = express.Router();
 
 //Routes
@@ -8,12 +8,16 @@ const router = express.Router();
 // 1) Basic CRUD API route
 router
   .route('/')
-  .get(authController.protect ,bookController.getAllBooks)
+  .get(authController.protect, bookController.getAllBooks)
   .post(bookController.createBook);
 router
   .route('/:id')
   .get(bookController.getBook)
   .patch(bookController.updateBook)
-  .delete(bookController.deleteBook);
+  .delete(
+    authController.protect,
+    authController.restrictTo('admin', 'author'),
+    bookController.deleteBook
+  );
 
 module.exports = router;

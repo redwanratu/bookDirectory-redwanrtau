@@ -89,16 +89,28 @@ exports.protect = catchAsync(async (req, res, next) => {
   console.log(decoded);
 
   // 3. Check if user still exits
-  const freshUser = await User.findById(decoded.id);
-  if (!freshUser) {
+  const currentUser = await User.findById(decoded.id);
+  if (!currentUser) {
     return next(new AppError('No user on this token'), 404);
   }
   // CHeck if user changed password  after the token was issued
-  if (freshUser.changedPasswordAfter(decoded.iat)) {
+  if (currentUser.changedPasswordAfter(decoded.iat)) {
     return next(new AppError('Password has been changed !! Log in again!!'));
   }
 
   //GRANT ACCESS
-  req.user = freshUser;
+  req.user = currentUser;
   next();
 });
+
+// restrictTo middlewere
+
+exports.restrictTo = (...roles) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      console.log(req.user);
+      return next(new AppError(`Access denied for ${req.user.role} role`, 404));
+    }
+    next();
+  };
+};
